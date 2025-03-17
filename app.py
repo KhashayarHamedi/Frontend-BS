@@ -98,18 +98,13 @@ st.markdown(
         100% { opacity: 1; }
     }
 
-    .explore-btn {
-    animation: blinker 1.5s linear infinite;
-}
-
-@keyframes blinker {
-    50% {
-        opacity: 0;
+    /* Hover Effect */
+    .explore-btn:hover {
+        background-color: rgba(255, 255, 255, 0.2);
     }
-}
+    </style>
 
-
-    <a href="./pages/dashboard.py" class="explore-btn">EXPLORE MORE</a>
+    <a href="./pages/dashboard.py" class="explore-btn"> EXPLORE MORE</a>
     """,
     unsafe_allow_html=True
 )
