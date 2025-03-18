@@ -1,147 +1,158 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import datetime
-import time
 
-# ✅ **Page Configuration**
+# Set page configuration
 st.set_page_config(page_title="BetterSave Energy Dashboard", layout="wide")
 
-# ✅ **Apply Custom CSS for Background & Font Adjustments**
+# Load Data
+@st.cache_data(ttl=3600)
+def load_data():
+    gen_file = "energy_generation_preprocessed.csv"
+    cons_file = "energy_consumption_preprocessed.csv"
+
+    energy_gen = pd.read_csv(gen_file)
+    energy_cons = pd.read_csv(cons_file)
+
+    # Convert dates
+    energy_gen["Start date"] = pd.to_datetime(energy_gen["Start date"], errors="coerce")
+    energy_cons["Start date"] = pd.to_datetime(energy_cons["Start date"], errors="coerce")
+
+    return energy_gen, energy_cons
+
+energy_generation, energy_consumption = load_data()
+
+# Extract Key Metrics
+total_consumption = energy_consumption["Total (grid load) [MWh] Calculated resolutions"].sum()
+total_generation = energy_generation.iloc[:, 3:].apply(pd.to_numeric, errors='coerce').sum().sum()  # Sum of all energy sources
+
+# Group by Year and Sum Only Numeric Columns
+consumption_by_year = energy_consumption.groupby(energy_consumption["Start date"].dt.year).sum(numeric_only=True)
+generation_by_year = energy_generation.groupby(energy_generation["Start date"].dt.year).sum(numeric_only=True)
+
+# Find the Year with Highest Consumption and Generation
+highest_consumption_year = consumption_by_year["Total (grid load) [MWh] Calculated resolutions"].idxmax()
+highest_generation_year = generation_by_year.sum(axis=1).idxmax()
+
+efficiency_ratio = (total_generation / total_consumption) * 100
+
+# Sidebar Filters
+st.sidebar.header("Filters")
+year_selection = st.sidebar.slider("Select Year Range:", int(energy_consumption["Start date"].dt.year.min()), int(energy_consumption["Start date"].dt.year.max()), (2015, 2019))
+
+# Filter Data
+filtered_energy_gen = energy_generation[(energy_generation["Start date"].dt.year >= year_selection[0]) & (energy_generation["Start date"].dt.year <= year_selection[1])]
+filtered_energy_cons = energy_consumption[(energy_consumption["Start date"].dt.year >= year_selection[0]) & (energy_consumption["Start date"].dt.year <= year_selection[1])]
+
+# Custom CSS for Dark Theme with Neon Glow
 st.markdown("""
     <style>
+        body {
+            background-color: #121212;
+            color: white;
+        }
         .stApp {
-            background-color: black !important;  /* Keep Dashboard Background Black */
+            background-color: #121212;
         }
-        .stSubheader, .stTitle, .stText, .stMarkdown {
-            color: white !important; /* Ensure Readability */
+        .metric-container, .chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 15px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 24px;
+            color: white;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.8); /* Neon Glow Effect */
+            background: linear-gradient(135deg, #1f1c2c, #928DAB); /* Dark Futuristic Background */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .plotly-chart {
-            font-size: 16px !important; /* Ensure Larger Font */
+        .metric-container:hover, .chart-container:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 1);
         }
     </style>
 """, unsafe_allow_html=True)
 
-# ✅ **Title**
-st.title("📊 BetterSave Energy Dashboard")
+# Main Dashboard
+st.title("BetterSave Energy Dashboard")
+st.markdown("<h2 style='text-align: center; color: white ;'>Key Metrics</h2>", unsafe_allow_html=True)
+col1, col2, col3 = st.columns(3)
 
-# ✅ **Load Data**
-energy_consumption = pd.read_csv("energy_consumption_preprocessed.csv")
-energy_generation = pd.read_csv("energy_generation_preprocessed.csv")
+col1.markdown(f"""
+    <div class="metric-container">
+        <div>Total Energy Consumption</div>
+        <div>{total_consumption:,.0f} MWh</div>
+    </div>
+""", unsafe_allow_html=True)
 
-# ✅ **Convert Dates to Proper Format**
-energy_consumption["Start date"] = pd.to_datetime(energy_consumption["Start date"], errors="coerce")
-energy_generation["Start date"] = pd.to_datetime(energy_generation["Start date"], errors="coerce")
+col2.markdown(f"""
+    <div class="metric-container">
+        <div>Total Energy Generation</div>
+        <div>{total_generation:,.0f} MWh</div>
+    </div>
+""", unsafe_allow_html=True)
 
-# ✅ **Define Energy Generation Columns**
-generation_columns = [
-    "Biomass [MWh] Calculated resolutions",
-    "Hydropower [MWh] Calculated resolutions",
-    "Wind offshore [MWh] Calculated resolutions",
-    "Wind onshore [MWh] Calculated resolutions",
-    "Photovoltaics [MWh] Calculated resolutions",
-    "Other renewable [MWh] Calculated resolutions",
-    "Nuclear [MWh] Calculated resolutions",
-    "Lignite [MWh] Calculated resolutions",
-    "Hard coal [MWh] Calculated resolutions",
-    "Fossil gas [MWh] Calculated resolutions",
-    "Hydro pumped storage [MWh] Calculated resolutions",
-    "Other conventional [MWh] Calculated resolutions"
-]
+col3.markdown(f"""
+    <div class="metric-container">
+        <div>Efficiency (%)</div>
+        <div>{efficiency_ratio:.2f}%</div>
+    </div>
+""", unsafe_allow_html=True)
 
-# ✅ **Create "Total Generation" Column**
-energy_generation["Total Generation (MWh)"] = energy_generation[generation_columns].sum(axis=1)
+# Consumption vs. Generation Over Time
+st.markdown("### Energy Consumption vs. Generation Over Time")
 
-# ✅ **Group Data by Year (Ensuring No Decimals)**
-consumption_yearly = energy_consumption.groupby(energy_consumption["Start date"].dt.year)["Total (grid load) [MWh] Calculated resolutions"].sum().astype(int)
-generation_yearly = energy_generation.groupby(energy_generation["Start date"].dt.year)["Total Generation (MWh)"].sum().astype(int)
+df_trends = pd.DataFrame({
+    "Year": consumption_by_year.index,
+    "Consumption": consumption_by_year["Total (grid load) [MWh] Calculated resolutions"].values,
+    "Generation": generation_by_year.sum(axis=1).values
+})
 
-# ✅ **Find Highest & Lowest Consumption/Generation**
-highest_consumption_year = consumption_yearly.idxmax()
-lowest_consumption_year = consumption_yearly.idxmin()
-highest_generation_year = generation_yearly.idxmax()
-lowest_generation_year = generation_yearly.idxmin()
+df_trends_melted = df_trends.melt(id_vars=["Year"], var_name="Type", value_name="MWh")
 
-# ✅ **Display Key Insights in a Compact Format**
-st.subheader("📌 Key Energy Insights (2015-2019)")
-col1, col2 = st.columns(2)
-
-with col1:
-    st.metric(label="🟢 Highest Consumption Year", value=f"{highest_consumption_year} ({consumption_yearly.max():,.0f} MWh)")
-    st.metric(label="🔻 Lowest Consumption Year", value=f"{lowest_consumption_year} ({consumption_yearly.min():,.0f} MWh)")
-
-with col2:
-    st.metric(label="🟢 Highest Generation Year", value=f"{highest_generation_year} ({generation_yearly.max():,.0f} MWh)")
-    st.metric(label="🔻 Lowest Generation Year", value=f"{lowest_generation_year} ({generation_yearly.min():,.0f} MWh)")
-
-# ✅ **Energy Consumption & Generation Trends**
-st.subheader("📈 Yearly Energy Trends")
-col1, col2 = st.columns(2)
-
-with col1:
-    fig_bar_consumption = px.bar(
-        x=consumption_yearly.index, y=consumption_yearly.values,
-        labels={"x": "Year", "y": "Total Energy Consumption (MWh)"},
-        title="Total Energy Consumption (2015-2019)",
-        template="plotly_dark",
-        color_discrete_sequence=["#3498db"],
-        text_auto=True
-    )
-    st.plotly_chart(fig_bar_consumption, use_container_width=True)
-
-with col2:
-    fig_bar_generation = px.bar(
-        x=generation_yearly.index, y=generation_yearly.values,
-        labels={"x": "Year", "y": "Total Energy Generation (MWh)"},
-        title="Total Energy Generation (2015-2019)",
-        template="plotly_dark",
-        color_discrete_sequence=["#e74c3c"],
-        text_auto=True
-    )
-    st.plotly_chart(fig_bar_generation, use_container_width=True)
-
-# ✅ **Line Chart for Trends**
-fig_trend = px.line(
-    x=consumption_yearly.index, y=consumption_yearly.values,
-    labels={"x": "Year", "y": "Energy Consumption (MWh)"},
-    title="Energy Consumption Trend (2015-2019)",
-    template="plotly_dark",
-    color_discrete_sequence=["#2ecc71"]
+fig = px.line(
+    df_trends_melted,
+    x="Year",
+    y="MWh",
+    color="Type",
+    title="Annual Energy Trends",
+    markers=True,
+    template="plotly_dark"
 )
-st.plotly_chart(fig_trend, use_container_width=True)
 
-# ✅ **Energy Balance Chart**
-fig_area = px.area(
-    x=generation_yearly.index, y=generation_yearly.values,
-    labels={"x": "Year", "y": "Energy Generation (MWh)"},
-    title="Total Energy Generation Over Years",
-    template="plotly_dark",
-    color_discrete_sequence=["#f1c40f"]
-)
-st.plotly_chart(fig_area, use_container_width=True)
+st.markdown("""
+    <div class="chart-container">
+""", unsafe_allow_html=True)
+st.plotly_chart(fig, use_container_width=True)
+st.markdown("""</div>""", unsafe_allow_html=True)
 
-# ✅ **Pie Chart for Energy Sources (with Border & Enhanced Colors)**
-st.subheader("🔄 Energy Sources Breakdown (2015-2019)")
-generation_totals = energy_generation[generation_columns].sum()
+# Energy Source Contribution
+st.markdown("### Energy Source Contribution")
+# Ensure only numeric columns are summed
+numeric_generation = energy_generation.drop(columns=["Start date", "End date", "Unnamed: 0", "Year"], errors='ignore').apply(pd.to_numeric, errors='coerce')
 
+generation_sources = numeric_generation.sum().sort_values(ascending=False)
 fig_pie = px.pie(
-    values=generation_totals.values,
-    names=generation_totals.index,
-    title="Energy Generation by Source (2015-2019)",
-    color_discrete_sequence=px.colors.qualitative.Set3,
-    hole=0.3
+    names=generation_sources.index,
+    values=generation_sources.values,
+    title="Total Energy Generation by Source",
+    template="plotly_dark"
 )
-fig_pie.update_traces(marker=dict(line=dict(color='black', width=2)))  # Add border to pie slices
+
+st.markdown("""
+    <div class="chart-container">
+""", unsafe_allow_html=True)
 st.plotly_chart(fig_pie, use_container_width=True)
+st.markdown("""</div>""", unsafe_allow_html=True)
 
-# ✅ **Real-Time Date & Clock**
-st.subheader("⏳ Real-Time Clock & Date")
-clock_container = st.empty()
+# Data Download
+st.sidebar.markdown("### Download Data")
+st.sidebar.download_button("Download Consumption Data", data=filtered_energy_cons.to_csv(index=False), file_name="filtered_consumption.csv", mime="text/csv")
+st.sidebar.download_button("Download Generation Data", data=filtered_energy_gen.to_csv(index=False), file_name="filtered_generation.csv", mime="text/csv")
 
-while True:
-    now = datetime.datetime.now()
-    clock_container.markdown(
-        f"<h3 style='text-align:center; color:lightblue;'>🕒 {now.strftime('%H:%M:%S')}<br>📅 {now.strftime('%A, %d %B %Y')}</h3>",
-        unsafe_allow_html=True
-    )
-    time.sleep(1)  # Update every second
+st.markdown("---")
+st.markdown("Powered by BetterSave - Smarter Energy Decisions")

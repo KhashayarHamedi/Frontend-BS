@@ -38,20 +38,40 @@ def add_bg_from_local(image_file):
             text-align: center;
         }}
 
-        /* Center the button at the bottom */
-        .explore-btn {{
+        /* Center the buttons */
+        .btn-container {{
             display: flex;
             justify-content: center;
-            align-items: center;
-            position: fixed;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
+            margin-top: 50px;
+            gap: 20px;
+        }}
+
+        /* Button styling */
+        .custom-btn {{
             font-size: 20px;
             font-weight: bold;
-            color: white;
+            color: white !important;
             text-decoration: none;
-            padding: 10px 20px;
+            padding: 12px 25px;
+            border: 2px solid white;
+            border-radius: 5px;
+            transition: 0.3s ease-in-out;
+            animation: blink 1.5s infinite; /* Slower blinking */
+            background-color: transparent;
+            cursor: pointer;
+        }}
+
+        /* Slower blinking animation */
+        @keyframes blink {{
+            0% {{ background-color: white; color: black; }}
+            50% {{ background-color: black; color: white; }}
+            100% {{ background-color: white; color: black; }}
+        }}
+
+        /* Hover Effect */
+        .custom-btn:hover {{
+            animation: none; /* Stop blinking on hover */
+            background-color: rgba(255, 255, 255, 0.2);
         }}
         </style>
         """,
@@ -61,50 +81,19 @@ def add_bg_from_local(image_file):
 # **✅ Apply Background Image**
 add_bg_from_local("static/BK1.jpg")  # Path to the background image in static folder
 
-# **Sidebar Navigation**
-st.sidebar.title("Navigation")
-st.sidebar.page_link("app.py", label="🏡 Home")
-st.sidebar.page_link("pages/dashboard.py", label="📊 Dashboard")
-st.sidebar.page_link("pages/about.py", label="ℹ️ About")
+# **State Variables for Video Playback**
+if "play_video" not in st.session_state:
+    st.session_state.play_video = False
 
-# ✅ **"EXPLORE MORE" Button at Bottom**
-st.markdown(
-    """
-    <style>
-    /* Ensure this style only applies to the button */
-    .explore-btn {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        position: fixed;
-        bottom: 40px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 20px;
-        font-weight: bold;
-        color: white !important; /* Ensuring it's white */
-        text-decoration: none;
-        padding: 12px 25px;
-        border: 2px solid white;
-        border-radius: 5px;
-        transition: 0.3s ease-in-out;
-        animation: pulse 1.5s infinite;
-    }
+# ✅ **"EXPLORE MORE" Button**
+if st.button("EXPLORE MORE", key="explore"):
+    st.session_state.play_video = True  # Set session state to trigger video
 
-    /* Flashing Animation */
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
+# ✅ **Render Video & Close Button**
+if st.session_state.play_video:
+    st.video("static/BS_video.MP4")  # Path to the video file inside static folder
 
-    /* Hover Effect */
-    .explore-btn:hover {
-        background-color: rgba(255, 255, 255, 0.2);
-    }
-    </style>
-
-    <a href="./pages/dashboard.py" class="explore-btn"> EXPLORE MORE</a>
-    """,
-    unsafe_allow_html=True
-)
+    # Close Video Button
+    if st.button("CLOSE VIDEO", key="close"):
+        st.session_state.play_video = False  # Stop playing the video
+        st.rerun()  # ✅ Use the correct method to refresh the page
