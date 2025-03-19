@@ -100,6 +100,31 @@ def add_bg_from_local(image_file):
         .custom-btn:hover::before {{
             opacity: 1; /* Show glow on hover */
         }}
+
+        /* Floating Email Button */
+        .email-button {{
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: white;
+            color: black;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 12px 20px;
+            border-radius: 5px;
+            text-align: center;
+            text-decoration: none;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+            border: 2px solid black;
+            transition: 0.3s ease-in-out;
+        }}
+
+        .email-button:hover {{
+            background-color: black;
+            color: white;
+            transform: scale(1.05);
+        }}
+
         </style>
         """,
         unsafe_allow_html=True
@@ -124,3 +149,9 @@ if st.session_state.play_video:
     if st.button("CLOSE VIDEO", key="close"):
         st.session_state.play_video = False  # Stop playing the video
         st.rerun()  # ✅ Use the correct method to refresh the page
+
+# ✅ **Floating Email Button in Bottom-Right**
+st.markdown(
+    '<a class="email-button" href="mailto:officialkhashayar@gmail.com">Write to Us</a>',
+    unsafe_allow_html=True
+)

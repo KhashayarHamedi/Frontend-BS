@@ -103,7 +103,7 @@ col2.markdown(f"""
 
 col3.markdown(f"""
     <div class="metric-container">
-        <div>Efficiency (%)</div>
+        <div>Efficiency</div>
         <div>{efficiency_ratio:.2f}%</div>
     </div>
 """, unsafe_allow_html=True)
