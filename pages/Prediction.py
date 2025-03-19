@@ -1,34 +1,43 @@
 import streamlit as st
 import requests
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import random
 
-# Set page configuration
+# **🔹 Streamlit Page Config**
 st.set_page_config(page_title="BetterSave Energy Prediction", layout="wide")
 
-# API URL
+# **🔹 API URL**
 API_URL = "https://bettersave-296473938693.europe-west10.run.app/predict"
 
-
-# Fetch Prediction Data
-# @st.cache_data(ttl=3600)
-def fetch_prediction():
+# **🔹 Fetch Prediction Data**
+def fetch_prediction(steps):
+    params = {"steps": steps}
     response = requests.get(API_URL, params=params)
+
     if response.status_code == 200:
         try:
             data = response.json()
-            data["lower"] = data["confidence_interval"]["lower Residual load"]
-            data["upper"] = data["confidence_interval"]["upper Residual load"]
-            data.pop("confidence_interval")
-            # st.write(data)
-            if isinstance(data, list):
-                df = pd.DataFrame(data)
-            elif isinstance(data, dict):
-                df = pd.DataFrame.from_dict(data, orient='index').transpose()
-            else:
-                st.error("Unexpected API response format")
-                return None
 
+            # Handle missing confidence intervals
+            if "confidence_interval" in data:
+                data["lower"] = data["confidence_interval"]["lower Residual load"]
+                data["upper"] = data["confidence_interval"]["upper Residual load"]
+                data.pop("confidence_interval", None)
+
+            # Convert to DataFrame
+            df = pd.DataFrame(data)
+
+            # **🔹 Handle Missing 'Date' Column**
+            if "Date" not in df.columns:
+                # st.warning("⚠ No 'Date' column found. Creating synthetic dates...")
+                df["Date"] = pd.date_range(start="2020-01-01", periods=len(df), freq="D")
+            st.write(df)
+            # for index, row in df:
+            #     accumlated_noise = 0.001
+            #     row["forecast"] = row["forecast"] + (random.randint(0,15) / 100)
+            #     accumlated_noise += 0.001
             return df
         except Exception as e:
             st.error(f"Error processing data: {e}")
@@ -37,58 +46,82 @@ def fetch_prediction():
         st.error("Failed to fetch prediction data")
         return None
 
-# Load Data
-st.title("BetterSave Energy Prediction Dashboard")
+# **🔹 UI Setup**
+st.markdown("<h1 style='text-align: center;'>BetterSave Energy Prediction</h1>", unsafe_allow_html=True)
 st.markdown("""
 ### Energy Consumption & Generation Trends (2015-2020)
-Historical data from 2015-2019 is shown in blue, while predicted data from 2020 is highlighted in green.
+- **Historical Data (2015-2019):** Shown in **blue**.
+- **Predicted Data (2020+):** Shown in **green** with a **shaded confidence interval**.
 """)
 
-number_of_days = st.slider("number of days", 1, 365)
-params={"steps": number_of_days}
+# **🔹 User Input: Select Prediction Range**
+number_of_days = st.slider("Select Prediction Range (Days)", 1, 365, 30)
 
+# **🔹 Fetch & Display Data on Button Click**
 if st.button("Predict"):
-    data = fetch_prediction()
-    st.write(data)
-# st.write(data)
-# if data is not None:
-#     try:
-#         data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
-#         data = data.dropna(subset=["Date"])  # Drop rows where 'Date' is NaT
-#         data["Year"] = data["Date"].dt.year
-#         data["Month"] = data["Date"].dt.strftime('%b')
+    data = fetch_prediction(number_of_days)
 
-#         # Separate Historical and Predicted Data
-#         historical_data = data[data["Year"] < 2020]
-#         predicted_data = data[data["Year"] >= 2020]
+    if data is not None:
+        # Convert 'Date' and extract Year/Month
+        data["Date"] = pd.to_datetime(data["Date"], errors='coerce')
+        data = data.dropna(subset=["Date"])  # Remove invalid dates
+        data["Year"] = data["Date"].dt.year
+        data["Month"] = data["Date"].dt.strftime('%b')
 
-#         # Aggregate Historical Data by Year
-#         historical_grouped = historical_data.groupby("Year")[["Consumption", "Generation"]].sum().reset_index()
-#         predicted_grouped = predicted_data.groupby(["Year", "Month"])[["Consumption", "Generation"]].sum().reset_index()
+        # **🔹 Separate Historical (2015-2019) and Predicted (2020+)**
+        historical_data = data[data["Year"] < 2020]
+        predicted_data = data[data["Year"] >= 2020]
 
-#         # Melt Data for Plotly
-#         historical_melted = historical_grouped.melt(id_vars=["Year"], var_name="Type", value_name="MWh")
-#         predicted_melted = predicted_grouped.melt(id_vars=["Year", "Month"], var_name="Type", value_name="MWh")
+        # **🔹 Create Figure**
+        fig = go.Figure()
 
-#         # Plot Historical Data
-#         fig = px.line(
-#             historical_melted,
-#             x="Year", y="MWh", color="Type",
-#             title="Energy Trends: Historical & Predicted",
-#             markers=True, template="plotly_dark"
-#         )
+        # **🔹 Historical Data (Blue Line)**
+        if not historical_data.empty:
+            fig.add_trace(go.Scatter(
+                x=historical_data["Year"],
+                y=historical_data["forecast"],
+                mode="lines+markers",
+                name="Historical Forecast",
+                line=dict(color="blue", width=3)
+            ))
 
-#         # Add Predicted Data for 2020
-#         for type_ in predicted_melted["Type"].unique():
-#             filtered_pred = predicted_melted[predicted_melted["Type"] == type_]
-#             fig.add_scatter(
-#                 x=filtered_pred["Month"], y=filtered_pred["MWh"],
-#                 mode="lines+markers", name=f"{type_} (Predicted)",
-#                 line=dict(color="green", dash="dash")
-#             )
+        # **🔹 Predicted Data (Green Dashed Line)**
+        if not predicted_data.empty:
+            fig.add_trace(go.Scatter(
+                x=predicted_data["Date"],
+                y=predicted_data["forecast"],
+                mode="lines+markers",
+                name="Predicted Forecast",
+                line=dict(color="green", dash="dash", width=3)
+            ))
 
-#         st.plotly_chart(fig, use_container_width=True)
-#     except Exception as e:
-#         st.error(f"Error processing visualization: {e}")
-# else:
-#     st.error("No prediction data available")
+            # **🔹 Confidence Interval (Shaded Area)**
+            fig.add_trace(go.Scatter(
+                x=predicted_data["Date"].tolist() + predicted_data["Date"].tolist()[::-1],
+                y=predicted_data["upper"].tolist() + predicted_data["lower"].tolist()[::-1],
+                fill='toself',
+                fillcolor='rgba(0,255,0,0.2)',
+                line=dict(color='rgba(255,255,255,0)'),
+                name="Confidence Interval"
+            ))
+
+        # **🔹 Custom X-Axis Formatting**
+        fig.update_layout(
+            title="Energy Trends: Historical vs. Predicted",
+            xaxis_title="Year / Month",
+            yaxis_title="MWh",
+            template="plotly_white",
+            xaxis=dict(
+                tickmode='array',
+                tickvals=data["Date"],
+                ticktext=[f"{m} {y}" if y == 2020 else str(y) for y, m in zip(data["Year"], data["Month"])]
+            )
+        )
+
+        col1, col2 = st.columns((3,1))
+        # **🔹 Show Chart**
+        with col1:
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.write("HOW MANY ")

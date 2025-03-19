@@ -59,6 +59,22 @@ def add_bg_from_local(image_file):
             animation: blink 1.5s infinite; /* Slower blinking */
             background-color: transparent;
             cursor: pointer;
+            position: relative;
+        }}
+
+        /* Green glowing effect */
+        .custom-btn::before {{
+            content: "";
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 5px;
+            background: linear-gradient(45deg, #00ffcc, #00ffcc, #00ffcc, #00ffcc);
+            z-index: -1;
+            opacity: 0;
+            animation: glow 3s infinite; /* Slow glowing effect */
         }}
 
         /* Slower blinking animation */
@@ -68,10 +84,21 @@ def add_bg_from_local(image_file):
             100% {{ background-color: white; color: black; }}
         }}
 
+        /* Glowing animation */
+        @keyframes glow {{
+            0% {{ opacity: 0; box-shadow: 0 0 5px #00ffcc; }}
+            50% {{ opacity: 1; box-shadow: 0 0 20px #00ffcc; }}
+            100% {{ opacity: 0; box-shadow: 0 0 5px #00ffcc; }}
+        }}
+
         /* Hover Effect */
         .custom-btn:hover {{
             animation: none; /* Stop blinking on hover */
             background-color: rgba(255, 255, 255, 0.2);
+        }}
+
+        .custom-btn:hover::before {{
+            opacity: 1; /* Show glow on hover */
         }}
         </style>
         """,
@@ -91,7 +118,7 @@ if st.button("EXPLORE MORE", key="explore"):
 
 # ✅ **Render Video & Close Button**
 if st.session_state.play_video:
-    st.video("static/BS_video.MP4")  # Path to the video file inside static folder
+    st.video("static/Final_video.MP4")  # Path to the video file inside static folder
 
     # Close Video Button
     if st.button("CLOSE VIDEO", key="close"):
